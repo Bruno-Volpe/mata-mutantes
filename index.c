@@ -165,6 +165,38 @@ bool test_sort() {
     return true;
 }
 
+// Additional sort test with floating point numbers
+int compare_float(const void* a, const void* b) {
+    return (*(float*)a > *(float*)b) - (*(float*)a < *(float*)b);
+}
+
+bool test_sort_float() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    float values[] = {3.1, 1.2, 2.3};
+    for (int i = 0; i < 3; i++) {
+        float* num = malloc(sizeof(float));
+        *num = values[i];
+        ASSERT_CC_OK(cc_array_add(a, num))
+    }
+
+    cc_array_sort(a, compare_float)
+
+    void* get_result;
+    ASSERT_CC_OK(cc_array_get_at(a, 0, &get_result))
+    ASSERT_EQ(1.2, *(float*)get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 1, &get_result))
+    ASSERT_EQ(2.3, *(float*)get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 2, &get_result))
+    ASSERT_EQ(3.1, *(float*)get_result)
+
+    cc_array_destroy(a);
+    return true;
+}
+
 // Test to filter the array
 bool is_even(const void* value) {
     return ((int) (intptr_t) value) % 2 == 0;
@@ -241,6 +273,22 @@ bool test_remove_all_free() {
 
     cc_array_remove_all_free(a)
 
+    ASSERT_EQ(0, cc_array_size(a))
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test to remove all elements from the array
+bool test_remove_all() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    cc_array_remove_all(a)
     ASSERT_EQ(0, cc_array_size(a))
 
     cc_array_destroy(a);
@@ -324,6 +372,35 @@ bool test_iter_add() {
     return true;
 }
 
+// Test adding elements using iterator in different scenarios
+bool test_iter_add_multiple() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 3; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    CC_ArrayIter iter;
+    cc_array_iter_init(&iter, a)
+
+    ASSERT_CC_OK(cc_array_iter_next(&iter, NULL))
+    ASSERT_CC_OK(cc_array_iter_add(&iter, (void*) (intptr_t) 10))
+    ASSERT_CC_OK(cc_array_iter_add(&iter, (void*) (intptr_t) 20))
+
+    ASSERT_EQ(5, cc_array_size(a))
+
+    void* get_result;
+    ASSERT_CC_OK(cc_array_get_at(a, 1, &get_result))
+    ASSERT_EQ(10, (int) (intptr_t) get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 2, &get_result))
+    ASSERT_EQ(20, (int) (intptr_t) get_result)
+
+    cc_array_destroy(a);
+    return true;
+}
+
 // Test replacing elements using iterator
 bool test_iter_replace() {
     CC_Array* a;
@@ -376,6 +453,46 @@ bool test_zip_iter_next() {
     ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
     ASSERT_EQ(2, (int) (intptr_t) result1)
     ASSERT_EQ(5, (int) (intptr_t) result2)
+
+    cc_array_destroy(a1);
+    cc_array_destroy(a2);
+    return true;
+}
+
+// Test iterating two arrays of different sizes in parallel
+bool test_zip_iter_next_different_sizes() {
+    CC_Array* a1;
+    CC_Array* a2;
+    ASSERT_CC_OK(cc_array_new(&a1))
+    ASSERT_CC_OK(cc_array_new(&a2))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a1, (void*) (intptr_t) i))
+    }
+
+    for (int i = 0; i < 3; i++) {
+        ASSERT_CC_OK(cc_array_add(a2, (void*) (intptr_t) (i + 5)))
+    }
+
+    CC_ArrayZipIter iter;
+    cc_array_zip_iter_init(&iter, a1, a2)
+
+    void* result1;
+    void* result2;
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(0, (int) (intptr_t) result1)
+    ASSERT_EQ(5, (int) (intptr_t) result2)
+
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(1, (int) (intptr_t) result1)
+    ASSERT_EQ(6, (int) (intptr_t) result2)
+
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(2, (int) (intptr_t) result1)
+    ASSERT_EQ(7, (int) (intptr_t) result2)
+
+    enum cc_stat status = cc_array_zip_iter_next(&iter, &result1, &result2)
+    ASSERT_EQ(CC_ITER_END, status)
 
     cc_array_destroy(a1);
     cc_array_destroy(a2);
@@ -451,6 +568,48 @@ bool test_zip_iter_remove() {
     return true;
 }
 
+// Test removing elements in parallel using zip iterator with additional checks
+bool test_zip_iter_remove_extended() {
+    CC_Array* a1;
+    CC_Array* a2;
+    ASSERT_CC_OK(cc_array_new(&a1))
+    ASSERT_CC_OK(cc_array_new(&a2))
+
+    for (int i = 0; i < 3; i++) {
+        ASSERT_CC_OK(cc_array_add(a1, (void*) (intptr_t) i))
+        ASSERT_CC_OK(cc_array_add(a2, (void*) (intptr_t) (i + 3)))
+    }
+
+    CC_ArrayZipIter iter;
+    cc_array_zip_iter_init(&iter, a1, a2)
+
+    void* result1;
+    void* result2;
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(0, (int) (intptr_t) result1)
+    ASSERT_EQ(3, (int) (intptr_t) result2)
+
+    ASSERT_CC_OK(cc_array_zip_iter_remove(&iter, NULL, NULL))
+    ASSERT_EQ(2, cc_array_size(a1))
+    ASSERT_EQ(2, cc_array_size(a2))
+
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(1, (int) (intptr_t) result1)
+    ASSERT_EQ(4, (int) (intptr_t) result2)
+
+    ASSERT_CC_OK(cc_array_zip_iter_remove(&iter, NULL, NULL))
+    ASSERT_EQ(1, cc_array_size(a1))
+    ASSERT_EQ(1, cc_array_size(a2))
+
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(2, (int) (intptr_t) result1)
+    ASSERT_EQ(5, (int) (intptr_t) result2)
+
+    cc_array_destroy(a1);
+    cc_array_destroy(a2);
+    return true;
+}
+
 // Test to reduce the array to a single value
 void sum(void* a, void* b, void* result) {
     *(int*)result = *(int*)a + *(int*)b;
@@ -469,6 +628,52 @@ bool test_reduce() {
     int result = 0;
     cc_array_reduce(a, sum, &result)
     ASSERT_EQ(15, result)  // 1+2+3+4+5 = 15
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Additional reduce test with multiplication
+void multiply(void* a, void* b, void* result) {
+    *(int*)result = *(int*)a * (*(int*)b ? *(int*)b : 1);
+}
+
+bool test_reduce_multiplication() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 1; i <= 5; i++) {
+        int* num = malloc(sizeof(int));
+        *num = i;
+        ASSERT_CC_OK(cc_array_add(a, num))
+    }
+
+    int result = 1;
+    cc_array_reduce(a, multiply, &result)
+    ASSERT_EQ(120, result)  // 1*2*3*4*5 = 120
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Additional reduce test with subtraction
+void subtract(void* a, void* b, void* result) {
+    *(int*)result = *(int*)a - *(int*)b;
+}
+
+bool test_reduce_subtraction() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 1; i <= 5; i++) {
+        int* num = malloc(sizeof(int));
+        *num = i;
+        ASSERT_CC_OK(cc_array_add(a, num))
+    }
+
+    int result = 0;
+    cc_array_reduce(a, subtract, &result)
+    ASSERT_EQ(-13, result)  // (((1-2)-3)-4)-5 = -13
 
     cc_array_destroy(a);
     return true;
@@ -502,6 +707,34 @@ bool test_map() {
     return true;
 }
 
+// Additional map test with decrement function
+void decrement(void* e) {
+    int* num = (int*)e;
+    (*num)--;
+}
+
+bool test_map_decrement() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        int* num = malloc(sizeof(int));
+        *num = i;
+        ASSERT_CC_OK(cc_array_add(a, num))
+    }
+
+    cc_array_map(a, decrement)
+
+    void* get_result;
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_get_at(a, i, &get_result))
+        ASSERT_EQ(i - 1, *(int*)get_result)
+    }
+
+    cc_array_destroy(a);
+    return true;
+}
+
 // Test to check if the array contains a specific element
 bool test_contains() {
     CC_Array* a;
@@ -513,6 +746,43 @@ bool test_contains() {
 
     ASSERT_EQ(3, cc_array_contains(a, (void*) 3))
     ASSERT_EQ(0, cc_array_contains(a, (void*) 5))
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test to check if the array contains duplicated elements
+bool test_contains_duplicates() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    ASSERT_CC_OK(cc_array_add(a, (void*) 1))
+    ASSERT_CC_OK(cc_array_add(a, (void*) 2))
+    ASSERT_CC_OK(cc_array_add(a, (void*) 1))  // Duplicate
+
+    ASSERT_EQ(2, cc_array_contains(a, (void*) 1))
+    ASSERT_EQ(1, cc_array_contains(a, (void*) 2))
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Comparator function for test_contains_value
+int compare_int(const void* a, const void* b) {
+    return (int) (intptr_t) a - (int) (intptr_t) b;
+}
+
+// Test to check if the array contains a specific value using comparator
+bool test_contains_value() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    ASSERT_EQ(1, cc_array_contains_value(a, (void*) 3, compare_int))
+    ASSERT_EQ(0, cc_array_contains_value(a, (void*) 5, compare_int))
 
     cc_array_destroy(a);
     return true;
@@ -566,6 +836,29 @@ bool test_size_capacity() {
     return true;
 }
 
+// Test to get elements at different positions, including edge cases
+bool test_get_at() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    void* get_result;
+    ASSERT_CC_OK(cc_array_get_at(a, 0, &get_result))
+    ASSERT_EQ(0, (int) (intptr_t) get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 4, &get_result))
+    ASSERT_EQ(4, (int) (intptr_t) get_result)
+
+    enum cc_stat status = cc_array_get_at(a, 5, &get_result)
+    ASSERT_EQ(CC_ERR_OUT_OF_RANGE, status)
+
+    cc_array_destroy(a);
+    return true;
+}
+
 // Test to get the last element of the array
 bool test_get_last() {
     CC_Array* a;
@@ -578,6 +871,19 @@ bool test_get_last() {
     void* last_element;
     ASSERT_CC_OK(cc_array_get_last(a, &last_element))
     ASSERT_EQ(4, (int) (intptr_t) last_element)
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test getting the last element of an empty array
+bool test_get_last_empty() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    void* last_element;
+    enum cc_stat status = cc_array_get_last(a, &last_element)
+    ASSERT_EQ(CC_ERR_VALUE_NOT_FOUND, status)
 
     cc_array_destroy(a);
     return true;
@@ -822,22 +1128,6 @@ bool test_swap_at() {
     return true;
 }
 
-// Test to remove all elements from the array
-bool test_remove_all() {
-    CC_Array* a;
-    ASSERT_CC_OK(cc_array_new(&a))
-
-    for (int i = 0; i < 5; i++) {
-        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
-    }
-
-    cc_array_remove_all(a)
-    ASSERT_EQ(0, cc_array_size(a))
-
-    cc_array_destroy(a);
-    return true;
-}
-
 // Test to get the index of the last iterated element using iterator
 bool test_iter_index() {
     CC_Array* a;
@@ -931,6 +1221,15 @@ test_t TESTS[] = {
     &test_remove_all,
     &test_iter_index,
     &test_zip_iter_add_parallel,
+    &test_reduce_multiplication,
+    &test_get_at,
+    &test_zip_iter_remove_extended,
+    &test_contains_duplicates,
+    &test_sort_float,
+    &test_map_decrement,
+    &test_reduce_subtraction,
+    &test_iter_add_multiple,
+    &test_zip_iter_next_different_sizes,
+    &test_get_last_empty,
     NULL
 };
-
