@@ -112,6 +112,30 @@ bool test_copy_deep() {
     return true;
 }
 
+// Test to copy the array shallowly
+bool test_copy_shallow() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    CC_Array* shallow_copy;
+    ASSERT_CC_OK(cc_array_copy_shallow(a, &shallow_copy))
+    ASSERT_EQ(5, cc_array_size(shallow_copy))
+
+    void* get_result;
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_get_at(shallow_copy, i, &get_result))
+        ASSERT_EQ(i, (int) (intptr_t) get_result)
+    }
+
+    cc_array_destroy(a);
+    cc_array_destroy(shallow_copy);
+    return true;
+}
+
 // Test to sort the array
 int compare(const void* a, const void* b) {
     return (int) (intptr_t) a - (int) (intptr_t) b;
@@ -774,6 +798,103 @@ bool test_contains_value() {
     return true;
 }
 
+// Test to swap elements at specific positions
+bool test_swap_at() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    ASSERT_CC_OK(cc_array_add(a, (void*) 1))
+    ASSERT_CC_OK(cc_array_add(a, (void*) 2))
+    ASSERT_CC_OK(cc_array_add(a, (void*) 3))
+
+    ASSERT_EQ(3, cc_array_size(a))
+
+    ASSERT_CC_OK(cc_array_swap_at(a, 0, 2))
+
+    void* get_result;
+    ASSERT_CC_OK(cc_array_get_at(a, 0, &get_result))
+    ASSERT_EQ(3, (int) get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 2, &get_result))
+    ASSERT_EQ(1, (int) get_result)
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test to remove all elements from the array
+bool test_remove_all() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    cc_array_remove_all(a)
+    ASSERT_EQ(0, cc_array_size(a))
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test to get the index of the last iterated element using iterator
+bool test_iter_index() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    CC_ArrayIter iter;
+    cc_array_iter_init(&iter, a)
+
+    void* element;
+    size_t index = 0;
+    while (cc_array_iter_next(&iter, &element) == CC_OK) {
+        index = cc_array_iter_index(&iter);
+    }
+
+    ASSERT_EQ(4, index)
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test to add elements to two arrays in parallel using zip iterator
+bool test_zip_iter_add_parallel() {
+    CC_Array* a1;
+    CC_Array* a2;
+    ASSERT_CC_OK(cc_array_new(&a1))
+    ASSERT_CC_OK(cc_array_new(&a2))
+
+    for (int i = 0; i < 2; i++) {
+        ASSERT_CC_OK(cc_array_add(a1, (void*) (intptr_t) i))
+        ASSERT_CC_OK(cc_array_add(a2, (void*) (intptr_t) (i + 2)))
+    }
+
+    CC_ArrayZipIter iter;
+    cc_array_zip_iter_init(&iter, a1, a2)
+
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, NULL, NULL))
+    ASSERT_CC_OK(cc_array_zip_iter_add(&iter, (void*) (intptr_t) 10, (void*) (intptr_t) 20))
+    ASSERT_EQ(3, cc_array_size(a1))
+    ASSERT_EQ(3, cc_array_size(a2))
+
+    void* result1;
+    void* result2;
+    ASSERT_CC_OK(cc_array_get_at(a1, 1, &result1))
+    ASSERT_EQ(10, (int) (intptr_t) result1)
+
+    ASSERT_CC_OK(cc_array_get_at(a2, 1, &result2))
+    ASSERT_EQ(20, (int) (intptr_t) result2)
+
+    cc_array_destroy(a1);
+    cc_array_destroy(a2);
+    return true;
+}
+
 test_t TESTS[] = {
     &test_add_at,
     &test_remove,
@@ -805,6 +926,11 @@ test_t TESTS[] = {
     &test_zip_iter_index,
     &test_filter_mut,
     &test_contains_value,
+    &test_copy_shallow,
+    &test_swap_at,
+    &test_remove_all,
+    &test_iter_index,
+    &test_zip_iter_add_parallel,
     NULL
 };
 
