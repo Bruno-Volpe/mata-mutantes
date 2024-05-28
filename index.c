@@ -644,6 +644,136 @@ bool test_subarray_ranges() {
     return true;
 }
 
+// Test to remove the last element of the array
+bool test_remove_last() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    void* last_element;
+    ASSERT_CC_OK(cc_array_remove_last(a, &last_element))
+    ASSERT_EQ(4, (int) (intptr_t) last_element)
+    ASSERT_EQ(4, cc_array_size(a))
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Test to replace elements in parallel using zip iterator
+bool test_zip_iter_replace() {
+    CC_Array* a1;
+    CC_Array* a2;
+    ASSERT_CC_OK(cc_array_new(&a1))
+    ASSERT_CC_OK(cc_array_new(&a2))
+
+    for (int i = 0; i < 3; i++) {
+        ASSERT_CC_OK(cc_array_add(a1, (void*) (intptr_t) i))
+        ASSERT_CC_OK(cc_array_add(a2, (void*) (intptr_t) (i + 3)))
+    }
+
+    CC_ArrayZipIter iter;
+    cc_array_zip_iter_init(&iter, a1, a2)
+
+    void* result1;
+    void* result2;
+    ASSERT_CC_OK(cc_array_zip_iter_next(&iter, &result1, &result2))
+    ASSERT_EQ(0, (int) (intptr_t) result1)
+    ASSERT_EQ(3, (int) (intptr_t) result2)
+
+    ASSERT_CC_OK(cc_array_zip_iter_replace(&iter, (void*) 10, (void*) 20, &result1, &result2))
+    ASSERT_EQ(0, (int) (intptr_t) result1)
+    ASSERT_EQ(3, (int) (intptr_t) result2)
+
+    ASSERT_CC_OK(cc_array_get_at(a1, 0, &result1))
+    ASSERT_EQ(10, (int) (intptr_t) result1)
+
+    ASSERT_CC_OK(cc_array_get_at(a2, 0, &result2))
+    ASSERT_EQ(20, (int) (intptr_t) result2)
+
+    cc_array_destroy(a1);
+    cc_array_destroy(a2);
+    return true;
+}
+
+// Test to get the index of the last iterated element in parallel using zip iterator
+bool test_zip_iter_index() {
+    CC_Array* a1;
+    CC_Array* a2;
+    ASSERT_CC_OK(cc_array_new(&a1))
+    ASSERT_CC_OK(cc_array_new(&a2))
+
+    for (int i = 0; i < 3; i++) {
+        ASSERT_CC_OK(cc_array_add(a1, (void*) (intptr_t) i))
+        ASSERT_CC_OK(cc_array_add(a2, (void*) (intptr_t) (i + 3)))
+    }
+
+    CC_ArrayZipIter iter;
+    cc_array_zip_iter_init(&iter, a1, a2)
+
+    void* result1;
+    void* result2;
+    size_t index = 0;
+    while (cc_array_zip_iter_next(&iter, &result1, &result2) == CC_OK) {
+        index = cc_array_zip_iter_index(&iter);
+    }
+
+    ASSERT_EQ(2, index)
+
+    cc_array_destroy(a1);
+    cc_array_destroy(a2);
+    return true;
+}
+
+// Test to filter the array mutably
+bool test_filter_mut() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 6; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    ASSERT_CC_OK(cc_array_filter_mut(a, is_even))
+    ASSERT_EQ(3, cc_array_size(a))  // 0, 2, 4
+
+    void* get_result;
+    ASSERT_CC_OK(cc_array_get_at(a, 0, &get_result))
+    ASSERT_EQ(0, (int) (intptr_t) get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 1, &get_result))
+    ASSERT_EQ(2, (int) (intptr_t) get_result)
+
+    ASSERT_CC_OK(cc_array_get_at(a, 2, &get_result))
+    ASSERT_EQ(4, (int) (intptr_t) get_result)
+
+    cc_array_destroy(a);
+    return true;
+}
+
+// Comparator function for test_contains_value
+int compare_int(const void* a, const void* b) {
+    return (int) (intptr_t) a - (int) (intptr_t) b;
+}
+
+// Test to check if the array contains a specific value using comparator
+bool test_contains_value() {
+    CC_Array* a;
+    ASSERT_CC_OK(cc_array_new(&a))
+
+    for (int i = 0; i < 5; i++) {
+        ASSERT_CC_OK(cc_array_add(a, (void*) (intptr_t) i))
+    }
+
+    ASSERT_EQ(1, cc_array_contains_value(a, (void*) 3, compare_int))
+    ASSERT_EQ(0, cc_array_contains_value(a, (void*) 5, compare_int))
+
+    cc_array_destroy(a);
+    return true;
+}
+
 test_t TESTS[] = {
     &test_add_at,
     &test_remove,
@@ -670,6 +800,11 @@ test_t TESTS[] = {
     &test_iterate,
     &test_iter_replace_positions,
     &test_subarray_ranges,
+    &test_remove_last,
+    &test_zip_iter_replace,
+    &test_zip_iter_index,
+    &test_filter_mut,
+    &test_contains_value,
     NULL
 };
 
